@@ -3904,3 +3904,168 @@ ALTER TABLE ONLY customer_customer_demo
 
 ALTER TABLE ONLY employees
     ADD CONSTRAINT fk_employees_employees FOREIGN KEY (reports_to) REFERENCES employees;
+
+-- Consultas_postgres
+CREATE VIEW total_vendas_1997 AS (
+SELECT 
+ SUM((A.unit_price * A.quantity) * (1 - A.DISCOUNT)) 
+FROM ORDER_DETAILS A 
+JOIN 
+(
+	SELECT 
+	 ORDER_ID
+	FROM orders
+	WHERE EXTRACT(YEAR FROM order_date)  = 1997
+) b
+ON B.ORDER_ID = A.ORDER_ID
+);
+
+CREATE VIEW analise_YTD AS (
+    WITH RECEITA_TOTAL AS (
+SELECT
+	 EXTRACT(YEAR FROM B.ORDER_DATE) AS ANO
+	,EXTRACT(MONTH FROM B.ORDER_DATE) AS MES
+	,SUM((A.UNIT_PRICE * A.QUANTITY) * (1- A.DISCOUNT)) AS TOTAL    
+FROM ORDER_DETAILS A 
+JOIN
+ORDERS B
+ ON B.ORDER_ID = A.order_id
+GROUP BY 
+    EXTRACT(YEAR FROM B.ORDER_DATE),
+    EXTRACT(MONTH FROM B.ORDER_DATE)
+    ORDER BY 1,2
+), 
+RECEITASACUMULADAS AS (
+	SELECT 
+        ANO
+        ,MES
+        ,TOTAL
+        ,SUM(TOTAL) OVER (PARTITION BY ANO ORDER BY MES) AS TOTALYTD
+	FROM RECEITA_TOTAL
+)
+SELECT 
+    ANO
+    ,MES
+    ,TOTAL
+    ,TOTAL - LAG(TOTAL) OVER (PARTITION BY ANO ORDER BY MES) AS DIFERENCA_RECEITA
+    ,TOTALYTD
+    ,(TOTAL / (LAG(TOTAL) OVER (PARTITION BY ANO ORDER BY MES))-1) * 100 AS VARIACAO
+FROM RECEITASACUMULADAS
+);
+
+CREATE VIEW clientes_grupos_3_4_5 as (
+    WITH CLIENTES_GRUPO AS(
+	SELECT
+	 A.company_name
+	,SUM((C.unit_price * C.quantity) * (1-C.discount)) AS total
+	,NTILE(5) OVER(ORDER BY(SUM((C.unit_price * C.quantity) * (1-C.discount)))DESC) AS customer_group
+	FROM CUSTOMERS A 
+	JOIN
+	 ORDERS B
+	  ON B.customer_id = A.customer_id
+	JOIN
+	 ORDER_DETAILS C
+	 ON C.order_id = B.order_id
+	GROUP BY 
+	 	A.company_name
+	 ORDER BY 
+	 	total DESC
+)
+
+SELECT
+ company_name
+,total
+FROM CLIENTES_GRUPO
+WHERE 
+ CUSTOMER_GROUP >= 3
+);
+
+CREATE VIEW clientes_reino_unido_acima_1000 AS (
+    WITH Clientes_Reino_Unido AS (
+	SELECT 
+	 customer_id
+	,company_name
+	,country
+	FROM CUSTOMERS
+	WHERE COUNTRY = 'UK'
+)
+
+SELECT
+ A.company_name
+,SUM(c.unit_price * c.quantity * (1-c.discount)) AS Total
+FROM clientes_reino_unido A 
+JOIN
+ ORDERS B 
+ON B.customer_id = A.customer_id
+JOIN
+order_details c
+on c.order_id = B.order_id
+
+GROUP BY 
+ A.company_name
+HAVING
+ SUM(c.unit_price * c.quantity * (1-c.discount)) >= 1000
+ORDER BY 
+ Total desc
+);
+
+CREAT VIEW grupo_clientes AS (
+    SELECT
+ A.company_name
+,SUM((C.unit_price * C.quantity) * (1-C.discount)) AS total
+,NTILE(5) OVER(ORDER BY(SUM((C.unit_price * C.quantity) * (1-C.discount)))DESC) AS customer_group
+FROM CUSTOMERS A 
+JOIN
+ ORDERS B
+  ON B.customer_id = A.customer_id
+JOIN
+ ORDER_DETAILS C
+ ON C.order_id = B.order_id
+GROUP BY 
+ 	A.company_name
+ ORDER BY 
+ 	total DESC
+);
+
+CREATE VIEW top10_produtos AS (
+    SELECT
+ B.product_name
+,SUM(a.unit_price * a.quantity * (1-a.discount)) AS total_sales
+FROM order_details a 
+JOIN
+ products b 
+ on B.product_id = A.product_id
+
+GROUP BY 
+ B.product_name
+ORDER BY
+ total_sales desc
+ LIMIT 10
+);
+
+CREATE VIEW valor_pago_por_cliente AS (
+    SELECT
+    B.COMPANY_NAME
+   ,SUM(A.UNIT_PRICE * A.QUANTITY * (1 - A.DISCOUNT)) AS TOTAL_SALES
+FROM ORDER_DETAILS A 
+
+JOIN
+ (
+	SELECT 
+	 A.order_id
+	,A.customer_id
+	,B.company_name
+	FROM ORDERS A
+	JOIN
+	CUSTOMERS B
+	ON B.CUSTOMER_ID = A.customer_id
+	
+ ) B
+ ON B.ORDER_ID = A.ORDER_ID
+
+ GROUP BY
+  B.COMPANY_NAME
+
+ ORDER BY 
+ TOTAL_SALES desc
+)
