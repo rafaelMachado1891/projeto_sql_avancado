@@ -4009,7 +4009,7 @@ ORDER BY
  Total desc
 );
 
-CREAT VIEW grupo_clientes AS (
+CREATE VIEW grupo_clientes AS (
     SELECT
  A.company_name
 ,SUM((C.unit_price * C.quantity) * (1-C.discount)) AS total
